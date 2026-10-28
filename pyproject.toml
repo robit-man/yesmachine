@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yesmachine"
+version = "0.1.0"
+description = "Cross-platform remote desktop control center with owned UPnP mappings"
+requires-python = ">=3.11"
+license = {text = "AGPL-3.0-or-later"}
+dependencies = ["cryptography>=43,<47", "aiohttp>=3.10,<4", "qrcode>=8,<9", "Pillow>=10,<13", "numpy>=1.26,<3", "psutil>=5.9,<8"]
+
+[project.scripts]
+yesmachine = "yesmachine.app:main"
+
+[tool.setuptools]
+packages = ["yesmachine"]
+
+[tool.setuptools.package-data]
+yesmachine = ["web/*", "mobile/*"]

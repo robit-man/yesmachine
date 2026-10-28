@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>YesMachine — Overview</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/tokens.css">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><svg aria-hidden="true" viewBox="0 0 32 32"><rect x="1" y="1" width="30" height="30" rx="8"/><path d="m9 9 7 8 7-8M16 17v7"/></svg>yesmachine</div>
+    <nav aria-label="Main navigation">
+      <a href="#overview" data-route="overview">Overview</a>
+      <a href="#computers" data-route="computers">Computers</a>
+      <a href="#network" data-route="network">Network</a>
+      <a href="#phone" data-route="phone">Phone access</a>
+      <a href="#clients" data-route="clients">Other clients</a>
+      <a href="#features" data-route="features">Capabilities</a>
+      <a href="#activity" data-route="activity">Activity</a>
+      <a href="#settings" data-route="settings">Settings</a>
+    </nav>
+    <div class="sidebar-bottom">
+      <form id="utility-actions" novalidate>
+        <button class="ghost small" type="submit" name="action" value="native">Native settings ↗</button>
+        <button class="ghost small" type="submit" name="action" value="quit">Quit YesMachine</button>
+      </form>
+      <p>A local control center.<br>No account or subscription.<br>Powered by RustDesk 1.5.0.</p>
+    </div>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><span class="crumb">Your workspace <span aria-hidden="true">/</span> <span id="route-label">Overview</span></span><span class="status" id="global-status"><span class="dot"></span><span>Connecting to local app…</span></span></header>
+    <div class="global-notices">
+      <div class="notice error" id="offline" role="status" hidden>The local app is unavailable. Reopen YesMachine from its desktop launcher. Your form has been kept.</div>
+      <div class="notice" id="job-status" role="status" hidden></div>
+      <div class="notice error" id="job-error" role="alert" hidden></div>
+    </div>
+    <main id="main" tabindex="-1"><p class="muted">Loading your workspace…</p></main>
+  </div>
+</div>
+<dialog id="device-dialog" aria-labelledby="device-title">
+  <h2 id="device-title">Add a computer</h2>
+  <p class="hint">Install YesMachine on the other computer, start hosting, then import its connection profile. You can also enter its details below.</p>
+  <form id="device-form" novalidate>
+    <input type="hidden" name="id">
+    <div class="field"><label for="device-name">Computer name</label><input id="device-name" name="name" maxlength="80" autocomplete="off" required aria-describedby="name-error"><p id="name-error" class="field-error"></p></div>
+    <div class="field"><label for="device-protocol">Connection protocol</label><select id="device-protocol" name="protocol"><option value="yesmachine">YesMachine</option><option value="rdp">Standard RDP</option><option value="nomachine">NoMachine Player / NX</option></select></div>
+    <div class="field" id="native-username-field" hidden><label for="device-username">Server username (optional)</label><input id="device-username" name="username" autocomplete="username" maxlength="128"><p class="hint">Enter the password only in your native client.</p></div>
+    <div class="field-row">
+      <div class="field"><label for="device-host">IP address or hostname</label><input id="device-host" name="host" spellcheck="false" autocomplete="off" placeholder="192.168.1.52" required aria-describedby="host-error"><p id="host-error" class="field-error"></p></div>
+      <div class="field"><label for="device-port">Port</label><input id="device-port" name="port" type="number" value="21180" min="1" max="65535" required aria-describedby="port-error"><p id="port-error" class="field-error"></p></div>
+    </div>
+    <details id="pair-details"><summary>Pairing details and Wake-on-LAN</summary>
+      <div class="field" id="fingerprint-field"><label for="device-fingerprint">Certificate fingerprint</label><input id="device-fingerprint" name="fingerprint" spellcheck="false" autocomplete="off" aria-describedby="fingerprint-help fingerprint-error"><p id="fingerprint-help" class="hint">Verify this against the fingerprint shown on the host computer.</p><p id="fingerprint-error" class="field-error"></p></div>
+      <div class="field" id="access-key-field"><label for="device-token">Access key</label><input id="device-token" name="token" type="password" autocomplete="new-password" spellcheck="false" aria-describedby="token-help token-error"><label class="checkbox-label"><input type="checkbox" id="toggle-token"> Show access key</label><p id="token-help" class="hint">Stored privately on this computer. Leave blank when editing to keep the existing key.</p><p id="token-error" class="field-error"></p></div>
+      <div class="field"><label for="device-mac">MAC address (optional)</label><input id="device-mac" name="mac" spellcheck="false" placeholder="AA:BB:CC:DD:EE:FF" aria-describedby="mac-help mac-error"><p id="mac-help" class="hint">Used to send a wake packet on your local network.</p><p id="mac-error" class="field-error"></p></div>
+    </details>
+    <p class="field-error" id="form-error" role="alert"></p>
+    <div class="dialog-actions"><button type="submit" class="secondary" id="device-cancel" value="cancel" formnovalidate>Cancel</button><button type="submit" id="device-save" value="save">Save computer</button></div>
+  </form>
+</dialog>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-description">
+  <h2 id="confirm-title"></h2><p id="confirm-description"></p><p class="field-error" id="confirm-error" role="alert"></p>
+  <form id="confirm-form" novalidate><div class="dialog-actions"><button type="submit" class="secondary" id="confirm-cancel" value="cancel">Cancel</button><button type="submit" id="confirm-accept" value="accept">Continue</button></div></form>
+</dialog>
+<dialog id="rdp-dialog" aria-labelledby="rdp-title"><h2 id="rdp-title">Enable standard RDP</h2><p class="hint">RDP apps will use these separate credentials. They are stored in GNOME’s keyring, and do not use YesMachine’s access key or approval dialog.</p><form id="rdp-form" novalidate><div class="field"><label for="rdp-username">RDP username</label><input id="rdp-username" name="username" value="yesmachine" autocomplete="username" required maxlength="128"></div><div class="field"><label for="rdp-password">RDP password</label><input id="rdp-password" name="password" type="password" autocomplete="new-password" minlength="12" required><label class="checkbox-label"><input type="checkbox" id="show-rdp-password">Show password</label><p class="hint">At least 12 characters. This password stays out of profiles and logs.</p></div><div class="field"><label for="rdp-port">RDP port</label><input id="rdp-port" name="port" type="number" value="3389" min="1024" max="65535"></div><p id="rdp-error" class="field-error" role="alert"></p><div class="dialog-actions"><button type="submit" value="cancel" class="secondary">Cancel</button><button type="submit" value="enable">Enable RDP</button></div></form></dialog>
+<dialog id="qr-dialog" aria-labelledby="qr-title"><h2 id="qr-title">Scan with your phone</h2><p class="hint">This QR code includes a private access key. Anyone who scans it can control this desktop until the share expires or you revoke it.</p><div id="share-qr-container"></div><p id="qr-expiry" class="hint"></p><label for="private-link">Private link</label><input id="private-link" type="password" readonly autocomplete="off"><form id="qr-form" novalidate><div class="dialog-actions"><button type="submit" value="copy" class="secondary">Copy private link</button><button type="submit" value="close">Close</button></div></form></dialog>
+<input type="file" id="import-profile" class="file-input" accept="application/json,.json" aria-label="Import a YesMachine connection profile" tabindex="-1">
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="vnc-dialog" aria-labelledby="vnc-title"><h2 id="vnc-title">Enable VNC viewers</h2><p class="hint">Use a separate 8-character password. This starts a local desktop renderer and LAN listener. Classic VNC traffic is unencrypted; use a trusted LAN or VPN.</p><form id="vnc-form" novalidate><div class="field"><label for="vnc-password">VNC password</label><input id="vnc-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="8" required></div><div class="field"><label for="vnc-port">VNC port</label><input id="vnc-port" name="port" type="number" min="1024" max="65535" value="5900" required></div><p id="vnc-error" class="field-error" role="alert"></p><div class="dialog-actions"><button type="submit" value="cancel" class="secondary" formnovalidate>Cancel</button><button id="vnc-save" type="submit" value="save">Start VNC</button></div></form></dialog>
+</body>
+</html>

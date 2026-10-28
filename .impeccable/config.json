@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "clipped-overflow-container",
+        "value": "*",
+        "files": [
+          "yesmachine/web/index.html"
+        ],
+        "createdAt": "2026-10-28T16:45:54.225Z",
+        "reason": "User explicitly requested a locked 100vh sidebar and independently scrolling content. The app shell intentionally clips its viewport; menus use viewport-fixed positioning and dialogs use the top layer. Verified desktop and narrow layouts with browser tests."
+      }
+    ]
+  }
+}

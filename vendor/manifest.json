@@ -1,0 +1,15 @@
+{
+  "engine": "RustDesk",
+  "version": "1.5.0",
+  "source_commit": "fada664df7a294d1d1a9ca3e7cd3637069122f17",
+  "common_commit": "229b904508364c8997aad0fb5af57effac859f60",
+  "source": "https://github.com/rustdesk/rustdesk/tree/fada664df7a294d1d1a9ca3e7cd3637069122f17",
+  "release": "https://github.com/rustdesk/rustdesk/releases/tag/1.5.0",
+  "assets": {
+    "linux-x86_64": {"file": "rustdesk-1.5.0-x86_64.deb", "sha256": "4e2b9701d25a7ef373f3d09bda584a37d6902f97a6ab15f2e86d4a5783e2a0ec"},
+    "linux-aarch64": {"file": "rustdesk-1.5.0-aarch64.deb", "sha256": "1f2fc9be8321c10347aa33cb13198c6a956aec272c5e58ac81f4c0ef04037df3"},
+    "windows-x86_64": {"file": "rustdesk-1.5.0-x86_64.exe", "sha256": "8555777215510d83d2d61c9dc984e4fcc838bd7e79f9d18a42585431f5e8bb47"},
+    "macos-x86_64": {"file": "rustdesk-1.5.0-x86_64.dmg", "sha256": "1ca3cbfbe7f2bd28b50c93fcd50d4a0b671dc76d18be27cea99d3a65767eb526"},
+    "macos-aarch64": {"file": "rustdesk-1.5.0-aarch64.dmg", "sha256": "3929b0a4321e7d0f561a317059798be882d65decc59681eb77061f8efe56fbf4"}
+  }
+}

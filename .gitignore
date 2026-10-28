@@ -1,0 +1,16 @@
+.state/
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+artifacts/
+vendor/runtime/
+vendor/*.deb
+vendor/rustdesk-source/
+
+vendor/*.dmg
+vendor/*.exe
+vendor/*.part
+.impeccable/config.local.json
+.impeccable/hook.cache.json

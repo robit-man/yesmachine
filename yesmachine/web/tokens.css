@@ -1,0 +1,24 @@
+:root {
+  color-scheme: dark;
+  --background: #101419;
+  --surface: #191f27;
+  --text: #ffffff;
+  --muted: #b4c0ce;
+  --primary: #226b9a;
+  --secondary: #202f3e;
+  --border: #3a4655;
+  --success: #8de0b4;
+  --warning: #ffd08b;
+  --danger: #ffacb8;
+  --link: #9bd5ff;
+  --on-primary: #ffffff;
+  --font-body: "Aptos", "Segoe UI", system-ui, sans-serif;
+  --font-display: "Trebuchet MS", "Aptos", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "SFMono-Regular", monospace;
+  --radius: .75rem;
+  --radius-control: .375rem;
+  --radius-feature: 1.25rem;
+  --scroll-thumb: var(--border);
+  --scroll-hover: var(--muted);
+  --scroll-track: var(--background);
+}

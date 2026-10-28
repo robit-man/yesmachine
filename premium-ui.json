@@ -1,0 +1,32 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": [
+    "yesmachine/web"
+  ],
+  "locale": "en-US",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": [
+    "Form",
+    "Select/Listbox",
+    "Scrollbar",
+    "Toast",
+    "CRUD"
+  ],
+  "ownership": {
+    "Select/Listbox": "native"
+  },
+  "requiredCommands": [
+    "unit",
+    "syntax",
+    "tokens"
+  ],
+  "commands": {
+    "unit": ".venv/bin/python -m unittest discover -s tests -v",
+    "syntax": "node --check yesmachine/web/app.js && node --check yesmachine/mobile/phone.js",
+    "tokens": "python3 scripts/check_design.py"
+  },
+  "evidence": {
+    "crudFullFlow": "tests/browser_smoke.cjs",
+    "failurePaths": "tests/test_security.py"
+  }
+}
