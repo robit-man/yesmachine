@@ -78,6 +78,18 @@ class InstructionBuffer:
         return complete
 
 
+def instruction_values(message):
+    """Decode one already-framed instruction (lengths count Unicode chars)."""
+    values = []
+    offset = 0
+    while offset < len(message):
+        dot = message.index(".", offset)
+        end = dot + 1 + int(message[offset:dot])
+        values.append(message[dot + 1:end])
+        offset = end + 1
+    return values
+
+
 async def read_instruction(reader):
     values = []
     for _ in range(256):
@@ -122,6 +134,8 @@ class MobileShare:
         self.latest_grant = None
         self.ws_sessions = {}
         self.connection_id = None
+        self.desktop_task = None
+        self.desktop_writer = None
         self.joined_count = 0
         self.handshake_lock = None
         self.websockets = set()
@@ -130,6 +144,7 @@ class MobileShare:
         self.expected_origin = ""
 
     def status(self):
+        tunnel=self.tunnel
         grants=list(self.grants.items())
         viewers=list(self.sessions.items())
         connected_tokens=set(self.ws_sessions.values())
@@ -141,7 +156,7 @@ class MobileShare:
                    "connected":secret in connected_tokens}
                   for secret,value in viewers if unexpired(value["expires"]) and not value.get("internal")]
         return {"available": bool(shutil.which("cloudflared")) and bool(shutil.which("guacd") or shutil.which("docker")),
-                "active": bool(self.tunnel and self.tunnel.poll() is None and links),
+                "active": bool(tunnel and tunnel.poll() is None and links),
                 "url": self.public_url, "expires": self.expires, "clients": len(self.websockets),
                 "error": self.error, "local_port": self.local_port,"links":links,"sessions":sessions}
 
@@ -212,6 +227,7 @@ class MobileShare:
                     self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
                     self.thread.start()
                     self._run(self._start_server())
+                    self._run(self.ensure_desktop(1280, 800, "UTC"), 40)
                 if local_only:
                     if not self.tunnel:
                         self.public_url=f"http://127.0.0.1:{self.local_port}"
@@ -353,6 +369,103 @@ class MobileShare:
             raise web.HTTPUnauthorized(text="Scan the current QR code to sign in.")
         return web.json_response({"expires":self.sessions[request.cookies["yesmachine_phone"]]["expires"], "hostname":socket.gethostname()})
 
+    async def connect_desktop(self, target, width, height, timezone):
+        reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", self.guacd_port), 5)
+        try:
+            writer.write(instruction("select", target).encode())
+            await writer.drain()
+            arguments = await asyncio.wait_for(read_instruction(reader), 10)
+            if arguments[0] != "args":
+                raise ValueError("The browser backend did not offer a desktop.")
+            values = self.compatibility.rdp_credentials()
+            settings = {"hostname":"127.0.0.1", "port":str(self.compatibility.record["port"]),
+                        "username":values["username"], "password":values["password"],
+                        "security":"nla", "ignore-cert":"true", "disable-audio":"false",
+                        "resize-method":"display-update", "enable-drive":"false",
+                        "client-name":"YesMachine phone", "server-layout":"en-us-qwerty"}
+            # Only the managed loopback RDP host is accepted. Its certificate
+            # is verified at startup, before the private gateway can be used.
+            for message in [instruction("size",width,height,96),
+                            instruction("audio","audio/L16;rate=44100,channels=2"),
+                            instruction("video"), instruction("image","image/png","image/jpeg"),
+                            instruction("timezone",timezone),
+                            instruction("connect",*[name if name.startswith("VERSION_") else settings.get(name,"") for name in arguments[1:]])]:
+                writer.write(message.encode())
+            await writer.drain()
+            response = await asyncio.wait_for(read_instruction(reader), 15)
+            if response[0] != "ready":
+                raise ValueError("The RDP desktop connection was rejected.")
+            return reader, writer, response[1]
+        except BaseException:
+            writer.close()
+            raise
+
+    async def ensure_desktop(self, width, height, timezone):
+        if self.desktop_task and not self.desktop_task.done() and self.connection_id:
+            return
+        reader, writer, identity = await self.connect_desktop("rdp", width, height, timezone)
+        self.connection_id, self.desktop_writer = identity, writer
+        ready = asyncio.Event()
+
+        async def maintain_desktop():
+            decoder = codecs.getincrementaldecoder("utf-8")()
+            buffer = InstructionBuffer()
+            dimensions = (0, 0)
+            pixels_received = False
+            async def keepalive():
+                while True:
+                    writer.write(instruction("nop").encode())
+                    await writer.drain()
+                    await asyncio.sleep(5)
+            heartbeat=asyncio.create_task(keepalive())
+            try:
+                while data := await reader.read(65536):
+                    for message in buffer.feed(decoder.decode(data)):
+                        values = instruction_values(message)
+                        opcode = values[0]
+                        if opcode in ("error", "disconnect"):
+                            return
+                        if opcode == "audio":
+                            # The cache owner consumes no sound, but accepts
+                            # its stream so normal audio negotiation is kept.
+                            writer.write(instruction("ack",values[1],"OK",0).encode())
+                            await writer.drain()
+                        if opcode == "size" and values[1] == "0":
+                            dimensions = (int(values[2]), int(values[3]))
+                            pixels_received = False
+                        elif opcode == "img" and values[3] == "0":
+                            pixels_received = True
+                        elif opcode == "sync":
+                            # No browser needs to decode these images. guacd
+                            # owns the authoritative desktop/framebuffer cache.
+                            writer.write(instruction("sync", values[1]).encode())
+                            await writer.drain()
+                            if min(dimensions) >= 64 and pixels_received:
+                                ready.set()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self.error = "Desktop capture disconnected. Reconnect to start a fresh desktop stream."
+            finally:
+                heartbeat.cancel()
+                await asyncio.gather(heartbeat,return_exceptions=True)
+                writer.close()
+                if self.desktop_writer is writer:
+                    self.desktop_writer = None
+                    self.connection_id = None
+                ready.set()
+
+        self.desktop_task = asyncio.create_task(maintain_desktop())
+        try:
+            await asyncio.wait_for(ready.wait(), 20)
+            if self.desktop_task.done() or not self.connection_id:
+                raise ValueError("The host did not provide an initial desktop frame.")
+            self.error = ""
+        except BaseException:
+            self.desktop_task.cancel()
+            await asyncio.gather(self.desktop_task, return_exceptions=True)
+            raise
+
     async def websocket(self, request):
         self.check_origin(request, True)
         if not self.authorized(request):
@@ -367,33 +480,14 @@ class MobileShare:
         joined = False
         try:
             async with self.handshake_lock:
-                reader, writer = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", self.guacd_port), 5)
-                writer.write(instruction("select", self.connection_id or "rdp").encode())
-                await writer.drain()
-                arguments = await asyncio.wait_for(read_instruction(reader), 10)
-                if arguments[0] != "args":
-                    raise ValueError("The browser backend did not offer a desktop.")
                 width = max(320,min(1920,int(float(request.query.get("width",1280)))))
                 height = max(320,min(1920,int(float(request.query.get("height",800)))))
-                values = self.compatibility.rdp_credentials()
-                settings = {"hostname":"127.0.0.1", "port":str(self.compatibility.record["port"]),
-                        "username":values["username"], "password":values["password"],
-                        "security":"nla", "ignore-cert":"true", "disable-audio":"false",
-                        "resize-method":"display-update", "enable-drive":"false",
-                        "client-name":"YesMachine phone", "server-layout":"en-us-qwerty"}
-            # The only upstream is the locally managed RDP host whose certificate
-            # was verified at startup. No arbitrary network host is accepted here.
-                for message in [instruction("size",width,height,96),
-                            instruction("audio","audio/L16;rate=44100,channels=2"),
-                            instruction("video"), instruction("image","image/png","image/jpeg"),
-                            instruction("timezone",request.query.get("timezone","UTC")[:80]),
-                            instruction("connect",*[name if name.startswith("VERSION_") else settings.get(name,"") for name in arguments[1:]])]:
-                    writer.write(message.encode())
-                await writer.drain()
-                response = await asyncio.wait_for(read_instruction(reader), 15)
-                if response[0] != "ready":
-                    raise ValueError("The RDP desktop connection was rejected. Check GNOME desktop-sharing permissions.")
-                self.connection_id=response[1]
+                timezone=request.query.get("timezone","UTC")[:80]
+                await self.ensure_desktop(width, height, timezone)
+                # Every visible viewer joins the persistent owner. guacd's
+                # guac_display_dup() sends ALL layers as full PNG snapshots
+                # followed by sync before streaming subsequent dirty regions.
+                reader, writer, _ = await self.connect_desktop(self.connection_id, width, height, timezone)
                 self.joined_count+=1
                 joined = True
             await ws.send_str(instruction("",str(uuid.uuid4())))
@@ -437,7 +531,6 @@ class MobileShare:
             self.websockets.discard(ws)
             self.ws_sessions.pop(ws,None)
             if joined:self.joined_count=max(0,self.joined_count-1)
-            if not self.joined_count:self.connection_id=None
             await ws.close()
         return ws
 
@@ -478,10 +571,17 @@ class MobileShare:
         self.update_expiry()
 
     def prune(self):
-        for identity,grant in list(self.grants.items()):
-            if not unexpired(grant["expires"]):self.revoke(identity)
-        if self.tunnel and not any(not value.get("internal") for value in self.grants.values()):
-            self.stop_tunnel()
+        # A new tunnel has no grant until registration succeeds. Maintenance
+        # must not tear it down during that startup window.
+        if not self.lock.acquire(blocking=False):
+            return
+        try:
+            for identity,grant in list(self.grants.items()):
+                if not unexpired(grant["expires"]):self.revoke(identity)
+            if self.tunnel and not any(not value.get("internal") for value in self.grants.values()):
+                self.stop_tunnel()
+        finally:
+            self.lock.release()
 
     def stop_tunnel(self):
         if self.tunnel:
@@ -504,6 +604,10 @@ class MobileShare:
                 async def cleanup():
                     for ws in list(self.websockets):
                         await ws.close(code=1001,message=b"Share revoked")
+                    if self.desktop_task:
+                        self.desktop_task.cancel()
+                        await asyncio.gather(self.desktop_task,return_exceptions=True)
+                        self.desktop_task=None
                     if self.runner:
                         await self.runner.cleanup()
                 try:

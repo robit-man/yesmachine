@@ -6,7 +6,7 @@ claimed.
 
 ## Passing checks
 
-- 35 Python tests: TLS data transfer, bad pin/key rejection, management isolation,
+- 37 Python tests: TLS data transfer, bad pin/key rejection, management isolation,
   storage/CRUD, UPnP ownership/conflict/lease/cleanup, passive listener checks,
   image instruction framing across all split positions, Unicode/chunk parsing,
   no-expiry authorization, cookie/origin checks, link cycle/revocation, VNC
@@ -74,3 +74,23 @@ redirection are not implemented. See FEATURES.md and SECURITY.md.
 
 Screenshots and detailed local browser results remain in ignored `artifacts/`;
 no QR screenshots, secrets or runtime state are published.
+
+## Initial snapshot and native cursor follow-up
+
+Every visible browser now joins a persistent guacd desktop owner. The backend
+sends its complete cached layers before incremental updates. The owner keeps
+frames acknowledged and sends keepalives even when the screen is static. It is
+created when sharing starts and canceled on gateway shutdown. Browser readiness
+requires opaque coverage of the complete desktop, including after size changes.
+
+`tests/initial_frame_browser.cjs` supplies a partial center tile, verifies that
+it stays in loading state, then supplies an entire static desktop and checks
+both corners before any mouse input. It also verifies that hover sends movement
+with no button pressed, host-sent cursor positions update, the cursor uses the
+host bitmap, and the mock circular pointer is absent. The live mobile-browser
+test additionally requires 100% opaque initial coverage before any input.
+A real 3840×2160 desktop passed, followed by touch, pinch, rotation and reconnect.
+
+Tunnel maintenance also skips cleanup while share startup holds its lifecycle
+lock, preventing premature tunnel shutdown before a new key is created. This
+startup race has a dedicated regression test.

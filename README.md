@@ -42,6 +42,10 @@ QR with your phone. The Cloudflare HTTPS endpoint presents the remote desktop
 web app; the private key in the QR fragment is removed from browser history when
 read. The management API is never exposed through this endpoint.
 
+Each connection gets a complete desktop snapshot before incremental updates.
+The viewer uses the host-provided cursor image, with hover movement passed through
+without a click and no circular pointer overlay.
+
 The compact right tab opens input/display controls. Drag to move the mouse,
 tap to click, hold then drag to move windows, and use two fingers to pan/pinch.
 Portrait defaults to a 1:1 viewport; landscape fits the screen. Keyboard,

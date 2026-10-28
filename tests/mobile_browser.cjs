@@ -8,6 +8,7 @@ let redact='';
  const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
  try {
  const page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true});
+ let initialMouseEvents=0;page.on('websocket',socket=>socket.on('framesent',event=>{if(String(event.payload).startsWith('5.mouse,'))initialMouseEvents++;}));
  const errors=[];page.on('pageerror',error=>errors.push(error.message));
  await page.goto(config.url+(config.fragment?'#key='+encodeURIComponent(config.key):''),{waitUntil:'domcontentloaded'});
  if(!config.fragment){await page.getByLabel('Access key',{exact:true}).fill(config.key);await page.getByRole('button',{name:'Connect',exact:true}).click();}
@@ -15,7 +16,9 @@ let redact='';
  catch(error){console.error('Mobile viewer status:',await page.locator('#status').textContent());console.error('Browser errors:',JSON.stringify(errors));throw error;}
  assert.equal(await page.evaluate(()=>location.hash),'');
  assert.equal(await page.locator('#screen-state').isVisible(),false);
- const frame=await page.evaluate(()=>{const c=display.flatten(),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;const colors=new Set();for(let i=0;i<p.length;i+=400)colors.add(`${p[i]},${p[i+1]},${p[i+2]},${p[i+3]}`);return {w:c.width,h:c.height,colors:colors.size};});
+ assert.equal(initialMouseEvents,0,'The initial snapshot must arrive without any mouse input');
+ const frame=await page.evaluate(()=>{const c=display.flatten(),p=c.getContext('2d').getImageData(0,0,c.width,c.height).data;let opaque=0;for(let i=3;i<p.length;i+=4)opaque+=p[i]===255;const colors=new Set();for(let i=0;i<p.length;i+=400)colors.add(`${p[i]},${p[i+1]},${p[i+2]},${p[i+3]}`);return {w:c.width,h:c.height,colors:colors.size,coverage:opaque/(c.width*c.height)};});
+ assert.equal(frame.coverage,1,'The entire desktop must be initialized before becoming ready');
  assert.ok(frame.w>=320&&frame.h>=240&&frame.colors>16,'A real, nonblank desktop must render');
  assert.equal(await page.evaluate(()=>window.yesmachineRemote.view().mode),'viewport');
  fs.mkdirSync('artifacts',{recursive:true});await page.screenshot({path:'artifacts/phone-desktop-live.png'});
@@ -37,7 +40,7 @@ let redact='';
  await page.getByRole('button',{name:'Reconnect',exact:true}).click();
  await page.waitForFunction(()=>window.yesmachineRemote.ready(),null,{timeout:35000});
  assert.deepEqual(errors,[]);
- fs.writeFileSync('artifacts/mobile-results.json',JSON.stringify({passed:true,frame,checks:['public endpoint','fragment key removed','real desktop pixels','portrait viewport','hidden controls','touch mouse drag','pinch zoom','landscape fit','menu bounds','reconnect'],pageErrors:errors},null,2));
+ fs.writeFileSync('artifacts/mobile-results.json',JSON.stringify({passed:true,frame,checks:['complete initial snapshot without input','public endpoint','fragment key removed','real desktop pixels','portrait viewport','hidden controls','touch mouse drag','pinch zoom','landscape fit','menu bounds','reconnect'],pageErrors:errors},null,2));
  console.log('Phone browser passed: real desktop, touch drag, pinch zoom, rotation, menu and reconnect.');
  } finally {await browser.close();}
 })().catch(error=>{console.error(String(error.stack||error).replaceAll(redact,'[redacted]'));process.exit(1);});

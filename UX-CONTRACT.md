@@ -75,6 +75,9 @@ a deliberate secret-bearing action. Per-link cycle/revoke and session revoke
 follow shared confirmation and job states. Public errors keep reconnect reachable.
 The phone viewer hides controls in a right-edge menu, uses a draggable pointer,
 provides fit/viewport modes and two-finger pan/pinch, and handles orientation.
-Connection success requires rendered desktop pixels, not merely a socket/canvas.
+Connection success requires full desktop pixel coverage, not merely a socket or
+partially painted canvas. Each viewer joins a warm desktop cache for a complete
+initial snapshot before deltas. Hover movement passes through without a button;
+cursor shape and position come from the host protocol, with no mock bubble.
 VNC uses the same menu/form/job owners as RDP, with separate credentials and
 explicit LAN encryption guidance. Linux-only hosting limits remain visible.

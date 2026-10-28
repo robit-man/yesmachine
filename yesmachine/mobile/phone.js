@@ -1,35 +1,38 @@
 "use strict";
 const $=selector=>document.querySelector(selector);
 let client=null,display=null,keyboard=null,connected=false,painted=false,expiration=0,frameTimer=null;
-const viewport=$('#desktop'),stage=$('#remote-stage'),handle=$('#pointer-handle'),menu=$('#session-menu');
+const viewport=$('#desktop'),stage=$('#remote-stage'),menu=$('#session-menu');
 const view={scale:1,x:0,y:0,mode:'auto',pointerX:0,pointerY:0,input:'pointer'};
 let lastPortrait=innerHeight>innerWidth,gesture=null,single=null,holdTimer=null,held=false;
 const points=new Map();
+let cursorMode='remote',nativeCursor='';
+function showHostCursor(kind,force=false){if(!display)return;const next=kind==='mouse'?'mouse':'remote';if(next===cursorMode&&!force)return;cursorMode=next;viewport.style.cursor=next==='mouse'?(nativeCursor||'default'):'none';display.showCursor(next!=='mouse');}
+function completeDesktop(){const width=display.getWidth(),height=display.getHeight();if(width<64||height<64)return false;const pixels=display.getDefaultLayer().getCanvas().getContext('2d').getImageData(0,0,width,height).data;for(let i=3;i<pixels.length;i+=4)if(pixels[i]!==255)return false;return true;}
 const status=message=>{$('#status').textContent=message;};
 function menuOpen(){return menu.matches(':popover-open');}
 function closeMenu(){if(menuOpen())menu.hidePopover();}
 function clamp(){if(!display)return;const w=display.getWidth()*view.scale,h=display.getHeight()*view.scale;view.x=w<=viewport.clientWidth?(viewport.clientWidth-w)/2:Math.min(0,Math.max(viewport.clientWidth-w,view.x));view.y=h<=viewport.clientHeight?(viewport.clientHeight-h)/2:Math.min(0,Math.max(viewport.clientHeight-h,view.y));}
-function renderView(){if(!display)return;clamp();stage.style.width=`${display.getWidth()}px`;stage.style.height=`${display.getHeight()}px`;stage.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.scale})`;handle.style.left=`${view.x+view.pointerX*view.scale}px`;handle.style.top=`${view.y+view.pointerY*view.scale}px`;$('#zoom-level').textContent=`${Math.round(view.scale*100)}%`;}
+function renderView(){if(!display)return;clamp();stage.style.width=`${display.getWidth()}px`;stage.style.height=`${display.getHeight()}px`;stage.style.transform=`translate(${view.x}px,${view.y}px) scale(${view.scale})`;$('#zoom-level').textContent=`${Math.round(view.scale*100)}%`;}
 function fit(mode=null){if(!display||display.getWidth()<2)return;const portrait=viewport.clientHeight>viewport.clientWidth;if(mode)view.mode=mode;if(view.mode==='auto')view.mode=portrait?'viewport':'fit';if(view.mode==='fit')view.scale=Math.min(viewport.clientWidth/display.getWidth(),viewport.clientHeight/display.getHeight());else if(view.mode==='viewport')view.scale=1;view.x=(viewport.clientWidth-display.getWidth()*view.scale)/2;view.y=(viewport.clientHeight-display.getHeight()*view.scale)/2;renderView();}
 function zoom(scale,cx=viewport.clientWidth/2,cy=viewport.clientHeight/2){const old=view.scale;view.scale=Math.max(.1,Math.min(4,scale));view.x=cx-(cx-view.x)*view.scale/old;view.y=cy-(cy-view.y)*view.scale/old;view.mode='custom';renderView();}
 function pointerState(left=false,right=false){return {x:view.pointerX,y:view.pointerY,left,middle:false,right,up:false,down:false};}
 function sendPointer(left=held,right=false){if(!connected||!display)return;view.pointerX=Math.max(0,Math.min(display.getWidth()-1,view.pointerX));view.pointerY=Math.max(0,Math.min(display.getHeight()-1,view.pointerY));const edge=32,x=view.x+view.pointerX*view.scale,y=view.y+view.pointerY*view.scale;if(x<edge)view.x+=edge-x;else if(x>viewport.clientWidth-edge)view.x-=x-viewport.clientWidth+edge;if(y<edge)view.y+=edge-y;else if(y>viewport.clientHeight-edge)view.y-=y-viewport.clientHeight+edge;client.sendMouseState(pointerState(left,right));renderView();}
 function click(right=false){sendPointer(!right,right);sendPointer(false,false);}
-function releaseHeld(){clearTimeout(holdTimer);if(held){held=false;handle.classList.remove('held');sendPointer(false);}}
+function releaseHeld(){clearTimeout(holdTimer);if(held){held=false;sendPointer(false);}}
 function distance(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
 function midpoint(a,b){return {x:(a.x+b.x)/2,y:(a.y+b.y)/2};}
 viewport.addEventListener('pointerdown',event=>{
- if(!connected||menuOpen())return;event.preventDefault();viewport.focus({preventScroll:true});viewport.setPointerCapture(event.pointerId);
+ if(!connected||menuOpen())return;showHostCursor(event.pointerType);event.preventDefault();viewport.focus({preventScroll:true});viewport.setPointerCapture(event.pointerId);
  const box=viewport.getBoundingClientRect(),point={x:event.clientX-box.left,y:event.clientY-box.top};points.set(event.pointerId,point);
  if(event.pointerType==='mouse'){view.pointerX=(point.x-view.x)/view.scale;view.pointerY=(point.y-view.y)/view.scale;held=event.button===0;sendPointer(held,event.button===2);return;}
  if(points.size===2){releaseHeld();const [a,b]=[...points.values()],mid=midpoint(a,b);gesture={distance:distance(a,b),scale:view.scale,remoteX:(mid.x-view.x)/view.scale,remoteY:(mid.y-view.y)/view.scale};single=null;return;}
  single={x:point.x,y:point.y,lastX:point.x,lastY:point.y,moved:false,time:performance.now()};
  if(view.input==='touch'){view.pointerX=(point.x-view.x)/view.scale;view.pointerY=(point.y-view.y)/view.scale;held=true;sendPointer(true);}
- else holdTimer=setTimeout(()=>{if(single&&!single.moved&&points.size===1){held=true;handle.classList.add('held');sendPointer(true);}},450);
+ else holdTimer=setTimeout(()=>{if(single&&!single.moved&&points.size===1){held=true;sendPointer(true);}},450);
 });
 viewport.addEventListener('pointermove',event=>{
  if(!connected)return;const box=viewport.getBoundingClientRect(),point={x:event.clientX-box.left,y:event.clientY-box.top};
- if(event.pointerType==='mouse'){if(event.buttons||points.has(event.pointerId)){view.pointerX=(point.x-view.x)/view.scale;view.pointerY=(point.y-view.y)/view.scale;sendPointer(Boolean(event.buttons&1),Boolean(event.buttons&2));}return;}
+ if(event.pointerType==='mouse'){showHostCursor('mouse');view.pointerX=(point.x-view.x)/view.scale;view.pointerY=(point.y-view.y)/view.scale;sendPointer(Boolean(event.buttons&1),Boolean(event.buttons&2));return;}
  if(!points.has(event.pointerId))return;event.preventDefault();points.set(event.pointerId,point);
  if(points.size>=2&&gesture){const [a,b]=[...points.values()],mid=midpoint(a,b);view.scale=Math.max(.1,Math.min(4,gesture.scale*distance(a,b)/Math.max(1,gesture.distance)));view.x=mid.x-gesture.remoteX*view.scale;view.y=mid.y-gesture.remoteY*view.scale;view.mode='custom';renderView();return;}
  if(!single)return;const dx=point.x-single.lastX,dy=point.y-single.lastY;
@@ -39,15 +42,17 @@ viewport.addEventListener('pointermove',event=>{
 });
 function endPointer(event){if(!points.has(event.pointerId))return;points.delete(event.pointerId);if(event.pointerType==='mouse'){held=false;sendPointer(false);return;}if(single&&!single.moved&&!held&&performance.now()-single.time<450&&view.input==='pointer')click();releaseHeld();gesture=null;single=null;}
 viewport.addEventListener('pointerup',endPointer);viewport.addEventListener('pointercancel',event=>{points.delete(event.pointerId);single=null;gesture=null;releaseHeld();});viewport.addEventListener('contextmenu',event=>event.preventDefault());
+viewport.addEventListener('pointerleave',event=>{if(event.pointerType==='mouse'&&!event.buttons)showHostCursor('remote');});
 viewport.addEventListener('wheel',event=>{if(!connected)return;event.preventDefault();if(event.ctrlKey){zoom(view.scale*(event.deltaY<0?1.12:1/1.12));return;}client.sendMouseState({...pointerState(),up:event.deltaY<0,down:event.deltaY>0});client.sendMouseState(pointerState());},{passive:false});
-handle.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();click();}});
+
 async function session(){const response=await fetch('/api/session',{credentials:'same-origin'});if(!response.ok)return false;const value=await response.json();expiration=value.expires;$('#expires').textContent=expiration?`Until ${new Date(expiration*1000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`:'No expiry';return true;}
 function connect(){
- clearTimeout(frameTimer);client?.disconnect();connected=false;painted=false;$('#error').textContent='';$('#login-panel').hidden=true;$('#viewer').hidden=false;$('#screen-state').hidden=false;$('#screen-message').textContent='Waiting for desktop contents…';handle.hidden=true;status('Connecting…');
- const tunnel=new Guacamole.WebSocketTunnel(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/tunnel`);client=new Guacamole.Client(tunnel);display=client.getDisplay();stage.replaceChildren(display.getElement());display.showCursor(false);const activeClient=client;frameTimer=setTimeout(()=>{if(client!==activeClient||painted)return;client.disconnect();status('No desktop frames received');$('#screen-message').textContent='The host did not send a desktop frame. Open the right menu and reconnect, or check that the host desktop is unlocked.';},25000);
- view.mode='auto';display.onresize=()=>{if(!painted){view.pointerX=display.getWidth()/2;view.pointerY=display.getHeight()/2;fit('auto');}else renderView();};
+ clearTimeout(frameTimer);client?.disconnect();connected=false;painted=false;$('#error').textContent='';$('#login-panel').hidden=true;$('#viewer').hidden=false;$('#screen-state').hidden=false;$('#screen-message').textContent='Waiting for desktop contents…';viewport.classList.remove('cursor-ready');viewport.style.cursor='default';nativeCursor='';cursorMode='remote';status('Connecting…');
+ const tunnel=new Guacamole.WebSocketTunnel(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/tunnel`);client=new Guacamole.Client(tunnel);display=client.getDisplay();stage.replaceChildren(display.getElement());display.showCursor(true);const activeClient=client;frameTimer=setTimeout(()=>{if(client!==activeClient||painted)return;client.disconnect();status('No desktop frames received');$('#screen-message').textContent='The host did not send a desktop frame. Open the right menu and reconnect, or check that the host desktop is unlocked.';},25000);
+ const receive=tunnel.oninstruction;tunnel.oninstruction=(opcode,args)=>{receive(opcode,args);if(opcode==='mouse'){view.pointerX=Number(args[0]);view.pointerY=Number(args[1]);display.showCursor(cursorMode!=='mouse');renderView();}};display.oncursor=(canvas,x,y)=>{nativeCursor=canvas.width&&canvas.height?`url(${canvas.toDataURL('image/png')}) ${x} ${y}, default`:'none';showHostCursor(cursorMode,true);};
+ let desktopWidth=0,desktopHeight=0;view.mode='auto';display.onresize=(width,height)=>{if(width===desktopWidth&&height===desktopHeight)return;desktopWidth=width;desktopHeight=height;painted=false;$('#screen-state').hidden=false;$('#screen-message').textContent='Loading complete desktop…';view.pointerX=display.cursorX;view.pointerY=display.cursorY;fit('auto');};
  client.onstatechange=state=>{if(client!==activeClient)return;connected=state===3;if(connected)status('Waiting for screen…');else if(state===5){status('Disconnected');if(!painted)$('#screen-message').textContent='Desktop disconnected before a frame arrived. Open the menu to reconnect.';}};
- client.onsync=()=>{display.flush(()=>{if(client!==activeClient||painted||display.getWidth()<64||display.getHeight()<64)return;const canvas=display.getDefaultLayer().getCanvas();const pixel=canvas.getContext('2d').getImageData(Math.floor(canvas.width/2),Math.floor(canvas.height/2),1,1).data;if(!pixel[3])return;painted=true;clearTimeout(frameTimer);$('#screen-state').hidden=true;handle.hidden=false;fit('auto');status('Connected');});};
+ client.onsync=()=>{display.flush(()=>{if(client!==activeClient||painted||!completeDesktop())return;painted=true;clearTimeout(frameTimer);$('#screen-state').hidden=true;viewport.classList.add('cursor-ready');showHostCursor(cursorMode,true);fit('auto');status('Connected');});};
  client.onerror=error=>{status('Connection interrupted');$('#screen-message').textContent=error.message||'Desktop connection failed. Unlock the host and reconnect.';$('#screen-state').hidden=false;};
  if(!keyboard){keyboard=new Guacamole.Keyboard(viewport);keyboard.onkeydown=key=>{if(connected)client.sendKeyEvent(1,key);return false;};keyboard.onkeyup=key=>{if(connected)client.sendKeyEvent(0,key);};}
  client.onclipboard=(stream,mimetype)=>{if(mimetype!=='text/plain')return;const reader=new Guacamole.StringReader(stream);let text='';reader.ontext=value=>{if(text.length<1048576)text+=value;};reader.onend=()=>{$('#clipboard-text').value=text;};};
